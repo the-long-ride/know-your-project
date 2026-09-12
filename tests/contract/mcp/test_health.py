@@ -1,18 +1,11 @@
 from unittest.mock import Mock
 
 from know_your_project.mcp.server import create_mcp
+from know_your_project.mcp.tools import KnowledgeTools
 
 
 def test_health_route_is_registered_without_becoming_tool() -> None:
-    tools = Mock()
-    for name in [
-        "search_project_knowledge", "get_feature", "get_component",
-        "get_release_changes", "compare_releases", "trace_work_item", "get_screen_spec",
-    ]:
-        async def tool(*args, **kwargs):
-            return []
-        tool.__name__ = name
-        setattr(tools, name, tool)
+    tools = KnowledgeTools(revisions=Mock(), authorization=Mock())
     mcp = create_mcp(
         tools=tools,
         jwks_uri="https://login.example/jwks",
