@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - feat/initial-implementation
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5.26-community
+        env:
+          NEO4J_AUTH: neo4j/test-password
+        ports:
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p test-password 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: python -m pip install uv
+      - name: Install dependencies
+        run: uv sync --all-groups
+      - name: Test
+        run: uv run pytest -q
+      - name: Graphiti + Neo4j integration
+        env:
+          RUN_GRAPHITI_INTEGRATION: "1"
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: test-password
+          LOCAL_LLM_BASE_URL: http://127.0.0.1:9/v1
+          LOCAL_LLM_API_KEY: test-only
+          LOCAL_LLM_MODEL: gpt-oss:20b
+          LOCAL_EMBEDDING_MODEL: nomic-embed-text
+        run: uv run pytest tests/integration/knowledge -v
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check
+        run: uv run mypy src
+      - name: Validate Compose
+        run: |
+          cp .env.example .env
+          docker compose config
