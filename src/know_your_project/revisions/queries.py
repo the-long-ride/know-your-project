@@ -37,6 +37,23 @@ def _matches_component(fact: FactVersion, component: str | None) -> bool:
     return needle in haystack
 
 
+def _merge_results(
+    release_results: list[KnowledgeResult],
+    project_results: list[KnowledgeResult],
+    limit: int,
+) -> list[KnowledgeResult]:
+    merged: list[KnowledgeResult] = []
+    seen: set[str] = set()
+    for result in [*release_results, *project_results]:
+        if result.id in seen:
+            continue
+        seen.add(result.id)
+        merged.append(result)
+        if len(merged) >= limit:
+            break
+    return merged
+
+
 class ReleaseQueryService:
     def __init__(
         self, repository: KnowledgeRepository, revision_store: SqliteRevisionStore
@@ -52,13 +69,21 @@ class ReleaseQueryService:
         else:
             release = await self._store.get_latest_release(query.project_id)
         as_of = release.effective_at if release is not None else None
-        return await self._repository.search(KnowledgeQuery(
+        release_results = await self._repository.search(KnowledgeQuery(
             project_id=query.project_id,
             text=query.text,
             as_of=as_of,
             scope="release",
             limit=query.limit,
         ))
+        project_results = await self._repository.search(KnowledgeQuery(
+            project_id=query.project_id,
+            text=query.text,
+            as_of=as_of,
+            scope="project",
+            limit=query.limit,
+        ))
+        return _merge_results(release_results, project_results, query.limit)
 
     async def release_changes(
         self, project: ProjectId, release_id: ReleaseId
