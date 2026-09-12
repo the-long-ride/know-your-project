@@ -1,0 +1,20 @@
+services:
+  neo4j:
+    image: neo4j:5.26-community
+    environment:
+      NEO4J_AUTH: neo4j/local-development-password
+    volumes:
+      - neo4j-data:/data
+    expose:
+      - "7687"
+
+  app:
+    build: .
+    env_file: .env
+    depends_on:
+      - neo4j
+    ports:
+      - "8000:8000"
+
+volumes:
+  neo4j-data:
