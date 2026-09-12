@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 from know_your_project.domain.ids import ProjectId, ReleaseId
 from know_your_project.domain.queries import ReleaseKnowledgeQuery
+from know_your_project.knowledge.dto import KnowledgeResult
 from know_your_project.revisions.models import Release
 from know_your_project.revisions.queries import ReleaseQueryService
 
@@ -19,8 +20,9 @@ async def test_release_query_resolves_release_to_effective_time() -> None:
     await service.search(ReleaseKnowledgeQuery(
         project_id=ProjectId("p"), text="retry", release_id=ReleaseId("v1")
     ))
-    query = repository.search.await_args.args[0]
+    query = repository.search.await_args_list[0].args[0]
     assert query.as_of == datetime(2026, 9, 1, tzinfo=UTC)
+
 
 async def test_default_query_targets_latest_ready_release() -> None:
     repository = AsyncMock()
@@ -32,9 +34,33 @@ async def test_default_query_targets_latest_ready_release() -> None:
     )
     service = ReleaseQueryService(repository, store)
     await service.search(ReleaseKnowledgeQuery(project_id=ProjectId("p"), text="retry"))
-    query = repository.search.await_args.args[0]
+    query = repository.search.await_args_list[0].args[0]
     assert query.as_of == datetime(2026, 9, 2, tzinfo=UTC)
     assert query.scope == "release"
+
+
+async def test_project_work_item_knowledge_is_included_with_release_knowledge() -> None:
+    release_result = KnowledgeResult(id="release-fact", summary="Payment retries 3 times")
+    project_result = KnowledgeResult(id="pbi-fact", summary="PBI 42 requires payment retry")
+    repository = AsyncMock()
+    repository.search.side_effect = [[release_result], [project_result]]
+    store = AsyncMock()
+    store.get_latest_release.return_value = Release(
+        project_id=ProjectId("p"), release_id=ReleaseId("v2"), tag="v2",
+        commit_sha="b" * 40, effective_at=datetime(2026, 9, 2, tzinfo=UTC),
+    )
+    service = ReleaseQueryService(repository, store)
+
+    results = await service.search(
+        ReleaseKnowledgeQuery(project_id=ProjectId("p"), text="payment retry")
+    )
+
+    assert [call.args[0].scope for call in repository.search.await_args_list] == [
+        "release",
+        "project",
+    ]
+    assert [result.id for result in results] == ["release-fact", "pbi-fact"]
+
 
 async def test_compare_releases_uses_exact_snapshots_not_semantic_search() -> None:
     from know_your_project.domain.artifacts import Provenance
