@@ -26,6 +26,7 @@ class BranchState(BaseModel):
 class FactVersion(BaseModel):
     edge_uuid: str
     artifact_id: ArtifactId
+    scope: str = "release"
     subject: str
     predicate: str
     value: str

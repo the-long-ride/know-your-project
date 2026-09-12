@@ -82,6 +82,7 @@ async def build_runtime(settings: Settings | None = None) -> Runtime:
         client=azure,
         checkpoints=checkpoint_store,
         pipeline=pipeline,
+        revision_store=revision_store,
     )
     revisions = ReleaseQueryService(repository, revision_store)
     authorization = AuthorizationService()

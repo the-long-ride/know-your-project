@@ -9,6 +9,7 @@ class KnowledgeQuery(BaseModel):
     project_id: ProjectId
     text: str = Field(min_length=1)
     as_of: datetime | None = None
+    scope: str = "release"
     limit: int = Field(default=10, ge=1, le=50)
 
 

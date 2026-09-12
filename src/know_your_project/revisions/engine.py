@@ -15,9 +15,11 @@ def _version_uuid(
     artifact_id: ArtifactId,
     candidate: FactCandidate,
     effective_at: datetime,
+    scope: str,
 ) -> str:
     raw = "|".join([
         str(project_id),
+        scope,
         str(artifact_id),
         candidate.subject.strip().casefold(),
         candidate.predicate.strip().casefold(),
@@ -37,6 +39,7 @@ class RevisionEngine:
         previous: list[FactVersion],
         current: list[FactCandidate],
         effective_at: datetime,
+        scope: str = "release",
     ) -> RevisionPlan:
         old = {_slot(f.subject, f.predicate): f for f in previous if f.valid_to is None}
         new = {_slot(f.subject, f.predicate): f for f in current}
@@ -61,8 +64,9 @@ class RevisionEngine:
             if same:
                 continue
             version = FactVersion(
-                edge_uuid=_version_uuid(project_id, artifact_id, candidate, effective_at),
+                edge_uuid=_version_uuid(project_id, artifact_id, candidate, effective_at, scope),
                 artifact_id=artifact_id,
+                scope=scope,
                 subject=candidate.subject,
                 predicate=candidate.predicate,
                 value=candidate.value,

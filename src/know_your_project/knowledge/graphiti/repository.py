@@ -68,6 +68,7 @@ class GraphitiKnowledgeRepository:
                     if fact.provenance.release_id
                     else "",
                     "confidence": fact.confidence,
+                    "scope": fact.scope,
                 },
             )
             await edge.generate_embedding(self._graphiti.embedder)
@@ -77,12 +78,14 @@ class GraphitiKnowledgeRepository:
         edges = await self._graphiti.search(
             query.text,
             group_ids=[str(query.project_id)],
-            num_results=query.limit,
+            num_results=min(query.limit * 5, 250),
             search_filter=temporal_filters(query.as_of),
         )
         results: list[KnowledgeResult] = []
         for edge in edges:
             attrs = edge.attributes or {}
+            if str(attrs.get("scope", "release")) != query.scope:
+                continue
             results.append(KnowledgeResult(
                 id=edge.uuid,
                 summary=edge.fact,
@@ -95,4 +98,6 @@ class GraphitiKnowledgeRepository:
                     release_id=str(attrs["release_id"]) if attrs.get("release_id") else None,
                 )],
             ))
+            if len(results) >= query.limit:
+                break
         return results

@@ -1,6 +1,24 @@
+import re
+
 from know_your_project.domain.artifacts import FactCandidate, SourceArtifact
 from .llm import LocalKnowledgeExtractor
 from .parsers.base import ArtifactParser
+
+
+def _normalized(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().casefold()
+
+
+def _echoes_raw_content(value: str, artifact: SourceArtifact) -> bool:
+    candidate = _normalized(value)
+    raw = _normalized(artifact.content)
+    if not candidate or not raw or candidate not in raw:
+        return False
+    if len(candidate) >= 32:
+        return True
+    if artifact.kind == "source" and len(candidate) >= 12:
+        return any(token in candidate for token in ("{", "}", ";", "(", ")", "=>"))
+    return False
 
 
 class ExtractionService:
@@ -14,4 +32,5 @@ class ExtractionService:
         parser = next((p for p in self._parsers if p.supports(artifact)), None)
         if parser is None:
             return []
-        return await self._extractor.extract(parser.parse(artifact))
+        facts = await self._extractor.extract(parser.parse(artifact))
+        return [fact for fact in facts if not _echoes_raw_content(fact.value, artifact)]

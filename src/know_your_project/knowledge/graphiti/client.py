@@ -33,6 +33,6 @@ def create_graphiti(
         password,
         llm_client=llm,
         embedder=embedder,
-        cross_encoder=OpenAIRerankerClient(client=llm, config=llm_config),
+        cross_encoder=OpenAIRerankerClient(client=llm.client, config=llm_config),
         store_raw_episode_content=False,
     )

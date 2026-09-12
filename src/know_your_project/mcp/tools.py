@@ -44,8 +44,7 @@ class KnowledgeTools:
 
     async def get_release_changes(self, release: str, project: str):
         project_id = self._authorize(project)
-        results = await self._revisions.release_changes(project_id, ReleaseId(release))
-        return [project_result(r) for r in results]
+        return await self._revisions.release_changes(project_id, ReleaseId(release))
 
     async def compare_releases(
         self,

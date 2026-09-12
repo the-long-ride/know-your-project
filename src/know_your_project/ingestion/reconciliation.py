@@ -1,12 +1,14 @@
 from datetime import UTC, datetime
 
 from know_your_project.domain.artifacts import SourceArtifact
-from know_your_project.domain.ids import ArtifactId, ProjectId
+from know_your_project.domain.ids import ArtifactId, ProjectId, ReleaseId
 from know_your_project.ingestion.azure_devops.mapper import work_item_artifact
+from know_your_project.revisions.models import Release
 
 _DOC_SUFFIXES = (".md", ".txt", ".rst")
 _HTML_SUFFIXES = (".html", ".htm")
 _SOURCE_SUFFIXES = (".cs", ".py", ".ts", ".tsx", ".js", ".java", ".go", ".rs")
+_ZERO_SHA = "0" * 40
 
 
 def _kind_for_path(path: str) -> str | None:
@@ -21,10 +23,37 @@ def _kind_for_path(path: str) -> str | None:
 
 
 class ReconciliationService:
-    def __init__(self, *, client, checkpoints, pipeline) -> None:
+    def __init__(self, *, client, checkpoints, pipeline, revision_store=None) -> None:
         self._client = client
         self._checkpoints = checkpoints
         self._pipeline = pipeline
+        self._revision_store = revision_store
+
+    async def _artifact(
+        self,
+        project: str,
+        repository: str,
+        path: str,
+        revision: str,
+        *,
+        deleted: bool = False,
+    ) -> SourceArtifact | None:
+        kind = _kind_for_path(path)
+        if kind is None:
+            return None
+        content = "" if deleted else await self._client.file_text(repository, path, revision)
+        return SourceArtifact(
+            project_id=ProjectId(project),
+            artifact_id=ArtifactId(f"git:{repository}:{path}"),
+            kind=kind,
+            revision=revision,
+            content=content,
+            observed_at=datetime.now(UTC),
+            path=path,
+            repository=repository,
+            commit_sha=revision,
+            deleted=deleted,
+        )
 
     async def collect_git_artifacts(
         self,
@@ -37,30 +66,59 @@ class ReconciliationService:
         items = await self._client.changed_files(repository, old_sha, new_sha)
         output: list[SourceArtifact] = []
         for item in items:
-            kind = _kind_for_path(item.path)
-            if kind is None:
-                continue
-            deleted = item.change_type.casefold() == "delete"
-            content = "" if deleted else await self._client.file_text(
-                repository, item.path, new_sha
+            artifact = await self._artifact(
+                project,
+                repository,
+                item.path,
+                new_sha,
+                deleted=item.change_type.casefold() == "delete",
             )
-            output.append(SourceArtifact(
-                project_id=ProjectId(project),
-                artifact_id=ArtifactId(f"git:{repository}:{item.path}"),
-                kind=kind,
-                revision=new_sha,
-                content=content,
-                observed_at=datetime.now(UTC),
-                path=item.path,
-                repository=repository,
-                commit_sha=new_sha,
-                deleted=deleted,
-            ))
+            if artifact is not None:
+                output.append(artifact)
+        return output
+
+    async def collect_full_artifacts(
+        self, project: str, repository: str, ref: str, new_sha: str
+    ) -> list[SourceArtifact]:
+        output: list[SourceArtifact] = []
+        for path in await self._client.list_files(repository, new_sha):
+            artifact = await self._artifact(project, repository, path, new_sha)
+            if artifact is not None:
+                output.append(artifact)
         return output
 
     async def sync_work_item(self, project: str, work_item_id: int) -> SourceArtifact:
         payload = await self._client.get_work_item(work_item_id)
         return work_item_artifact(ProjectId(project), payload)
+
+    async def _release_for_tag(
+        self, project: str, repository: str, ref: str, new_sha: str
+    ) -> tuple[Release, str | None]:
+        if self._revision_store is None:
+            raise RuntimeError("revision store required for release tags")
+        project_id = ProjectId(project)
+        previous = await self._revision_store.get_latest_release(project_id)
+        commit = await self._client.get_commit(repository, new_sha)
+        raw_date = (commit.get("committer") or {}).get("date")
+        effective_at = (
+            datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+            if raw_date
+            else datetime.now(UTC)
+        )
+        tag = ref.removeprefix("refs/tags/")
+        release = Release(
+            project_id=project_id,
+            release_id=ReleaseId(tag),
+            tag=tag,
+            commit_sha=new_sha,
+            effective_at=effective_at,
+            predecessor=previous.release_id if previous else None,
+        )
+        await self._revision_store.save_release(release)
+        await self._revision_store.set_release_status(
+            project_id, release.release_id, "indexing"
+        )
+        return release, previous.commit_sha if previous else None
 
     async def sync_ref(
         self,
@@ -70,19 +128,41 @@ class ReconciliationService:
         old_sha: str | None,
         new_sha: str,
     ) -> None:
-        if old_sha is None:
-            raise RuntimeError("initial repository backfill is not configured for this ref")
-        artifacts = await self.collect_git_artifacts(
-            project, repository, ref, old_sha, new_sha
-        )
-        await self._pipeline.persist(
-            project_id=project,
-            repository_name=repository,
-            ref=ref,
-            sha=new_sha,
-            artifacts=artifacts,
-            release=None,
-        )
+        release = None
+        base_sha = old_sha
+        if ref.startswith("refs/tags/"):
+            release, base_sha = await self._release_for_tag(
+                project, repository, ref, new_sha
+            )
+
+        if base_sha is None or base_sha == _ZERO_SHA:
+            artifacts = await self.collect_full_artifacts(
+                project, repository, ref, new_sha
+            )
+        else:
+            artifacts = await self.collect_git_artifacts(
+                project, repository, ref, base_sha, new_sha
+            )
+
+        try:
+            await self._pipeline.persist(
+                project_id=project,
+                repository_name=repository,
+                ref=ref,
+                sha=new_sha,
+                artifacts=artifacts,
+                release=release,
+            )
+        except Exception:
+            if release is not None and self._revision_store is not None:
+                await self._revision_store.set_release_status(
+                    ProjectId(project), release.release_id, "failed"
+                )
+            raise
+        if release is not None and self._revision_store is not None:
+            await self._revision_store.set_release_status(
+                ProjectId(project), release.release_id, "ready"
+            )
 
     async def reconcile_refs(
         self, project: str, repository: str, tracked_refs: set[str]

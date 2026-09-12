@@ -46,6 +46,25 @@ class AzureDevOpsClient:
             response.raise_for_status()
             return response.text
 
+    async def list_files(self, repository: str, version: str) -> list[str]:
+        body = await self._get_json(
+            f"git/repositories/{repository}/items",
+            {
+                "scopePath": "/",
+                "recursionLevel": "Full",
+                "includeContentMetadata": "true",
+                "versionDescriptor.version": version,
+                "versionDescriptor.versionType": "commit",
+            },
+        )
+        return [
+            item["path"] for item in body.get("value", [])
+            if not item.get("isFolder", False)
+        ]
+
+    async def get_commit(self, repository: str, commit_sha: str) -> dict:
+        return await self._get_json(f"git/repositories/{repository}/commits/{commit_sha}")
+
     async def get_work_item(self, work_item_id: int) -> dict:
         return await self._get_json(
             f"wit/workitems/{work_item_id}", {"$expand": "relations"}
