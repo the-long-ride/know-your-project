@@ -15,3 +15,14 @@ async def test_unsupported_binary_is_not_sent_to_llm() -> None:
     ))
     assert result == []
     extractor.extract.assert_not_called()
+
+
+async def test_deleted_artifact_is_not_sent_to_llm() -> None:
+    extractor = AsyncMock()
+    service = ExtractionService([], extractor)
+    result = await service.extract(SourceArtifact(
+        project_id=ProjectId("p"), artifact_id=ArtifactId("old"), kind="source",
+        revision="2", content="", observed_at=datetime.now(UTC), path="Old.cs", deleted=True,
+    ))
+    assert result == []
+    extractor.extract.assert_not_called()

@@ -26,6 +26,7 @@ class SourceArtifact(BaseModel):
     path: str | None = None
     repository: str | None = None
     commit_sha: str | None = None
+    deleted: bool = False
 
 
 class FactCandidate(BaseModel):

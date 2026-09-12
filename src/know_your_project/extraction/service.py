@@ -9,6 +9,8 @@ class ExtractionService:
         self._extractor = extractor
 
     async def extract(self, artifact: SourceArtifact) -> list[FactCandidate]:
+        if artifact.deleted:
+            return []
         parser = next((p for p in self._parsers if p.supports(artifact)), None)
         if parser is None:
             return []
