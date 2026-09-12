@@ -28,6 +28,10 @@ def create_mcp(
     mcp.tool(annotations=ro)(tools.trace_work_item)
     mcp.tool(annotations=ro)(tools.get_screen_spec)
 
+    @mcp.custom_route("/health", methods=["GET"])
+    async def health(_: Request) -> JSONResponse:
+        return JSONResponse({"status": "healthy", "service": "know-your-project"})
+
     if webhook_secret is not None and webhook_handler is not None:
         @mcp.custom_route("/hooks/azure-devops", methods=["POST"])
         async def azure_devops_hook(request: Request) -> JSONResponse:
