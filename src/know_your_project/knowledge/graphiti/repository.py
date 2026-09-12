@@ -1,7 +1,7 @@
 from typing import Any
 
 from graphiti_core.edges import EntityEdge
-from graphiti_core.helpers import utc_now
+from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.nodes import EntityNode
 
 from know_your_project.domain.queries import KnowledgeQuery
