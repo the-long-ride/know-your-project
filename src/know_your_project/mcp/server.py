@@ -7,6 +7,7 @@ from starlette.responses import JSONResponse
 from know_your_project.ingestion.webhooks import (
     AzureDevOpsWebhookHandler,
     parse_push_event,
+    parse_work_item_event,
     verify_webhook_secret,
 )
 from know_your_project.mcp.tools import KnowledgeTools
@@ -42,8 +43,17 @@ def create_mcp(
             verify_webhook_secret(
                 request.headers.get("x-kyp-webhook-secret"), webhook_secret
             )
-            event = parse_push_event(await request.json())
-            await webhook_handler.handle_push(event)
+            payload = await request.json()
+            event_type = str(payload.get("eventType", "")).casefold()
+            if event_type == "git.push":
+                await webhook_handler.handle_push(parse_push_event(payload))
+            elif event_type.startswith("workitem."):
+                await webhook_handler.handle_work_item(parse_work_item_event(payload))
+            else:
+                return JSONResponse(
+                    {"accepted": False, "error": "unsupported Azure DevOps event"},
+                    status_code=400,
+                )
             return JSONResponse({"accepted": True}, status_code=202)
 
     return mcp

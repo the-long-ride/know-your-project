@@ -5,6 +5,19 @@ from know_your_project.domain.artifacts import SourceArtifact
 from know_your_project.domain.ids import ArtifactId, ProjectId
 
 
+def _changed_at(fields: dict[str, Any]) -> datetime:
+    raw = fields.get("System.ChangedDate")
+    if raw:
+        text = str(raw)
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            return datetime.fromisoformat(text)
+        except ValueError:
+            pass
+    return datetime.now(UTC)
+
+
 def work_item_artifact(project_id: ProjectId, payload: dict[str, Any]) -> SourceArtifact:
     f = cast(dict[str, Any], payload["fields"])
     content = "\n".join([
@@ -20,5 +33,5 @@ def work_item_artifact(project_id: ProjectId, payload: dict[str, Any]) -> Source
         kind="work_item",
         revision=str(payload["rev"]),
         content=content,
-        observed_at=datetime.now(UTC),
+        observed_at=_changed_at(f),
     )

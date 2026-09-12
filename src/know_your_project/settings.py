@@ -1,4 +1,4 @@
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     azdo_project: str
     azdo_token: str
     azdo_webhook_secret: str
+    azdo_repositories: str = ""
+    azdo_tracked_refs: str = "refs/heads/main"
+    azdo_release_tag_prefix: str = "refs/tags/"
+    azdo_work_item_types: str = "Product Backlog Item,User Story,Bug"
+    reconciliation_interval_seconds: int = Field(default=300, ge=30)
     neo4j_uri: str
     neo4j_user: str
     neo4j_password: str
@@ -20,3 +25,19 @@ class Settings(BaseSettings):
     mcp_jwt_issuer: str
     mcp_jwt_audience: str
     checkpoint_db: str = "./data/state.db"
+
+    @staticmethod
+    def _csv(value: str) -> tuple[str, ...]:
+        return tuple(part.strip() for part in value.split(",") if part.strip())
+
+    @property
+    def repositories(self) -> tuple[str, ...]:
+        return self._csv(self.azdo_repositories)
+
+    @property
+    def tracked_refs(self) -> tuple[str, ...]:
+        return self._csv(self.azdo_tracked_refs)
+
+    @property
+    def work_item_types(self) -> tuple[str, ...]:
+        return self._csv(self.azdo_work_item_types)

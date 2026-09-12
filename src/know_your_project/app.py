@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -13,6 +14,7 @@ from know_your_project.extraction.parsers.html import HtmlParser
 from know_your_project.extraction.parsers.source import TreeSitterSourceParser
 from know_your_project.extraction.parsers.work_item import WorkItemParser
 from know_your_project.extraction.service import ExtractionService
+from know_your_project.infrastructure.logging import audit
 from know_your_project.ingestion.azure_devops.client import AzureDevOpsClient
 from know_your_project.ingestion.checkpoints import SqliteCheckpointStore
 from know_your_project.ingestion.pipeline import IngestionPipeline
@@ -111,11 +113,39 @@ async def build_runtime(settings: Settings | None = None) -> Runtime:
     )
 
 
+async def reconcile_once(runtime: Runtime, settings: Settings) -> None:
+    tracked_refs = set(settings.tracked_refs)
+    for repository in settings.repositories:
+        await runtime.reconciliation.reconcile_refs(
+            settings.azdo_project,
+            repository,
+            tracked_refs,
+            settings.azdo_release_tag_prefix,
+        )
+    await runtime.reconciliation.reconcile_work_items(
+        settings.azdo_project, settings.work_item_types
+    )
+
+
+async def _reconciliation_loop(runtime: Runtime, settings: Settings) -> None:
+    while True:
+        try:
+            await reconcile_once(runtime, settings)
+        except Exception as exc:
+            audit("reconciliation_failed", error_type=type(exc).__name__)
+        await asyncio.sleep(settings.reconciliation_interval_seconds)
+
+
 async def main() -> None:
-    runtime = await build_runtime()
+    settings = Settings()  # type: ignore[call-arg]
+    runtime = await build_runtime(settings)
+    reconciliation_task = asyncio.create_task(_reconciliation_loop(runtime, settings))
     try:
         await runtime.mcp.run_async(transport="http", host="0.0.0.0", port=8000)
     finally:
+        reconciliation_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await reconciliation_task
         close_graphiti = cast(Callable[[], Awaitable[None]], runtime.graphiti.close)
         await close_graphiti()
 

@@ -14,6 +14,7 @@ _DOC_SUFFIXES = (".md", ".txt", ".rst")
 _HTML_SUFFIXES = (".html", ".htm")
 _SOURCE_SUFFIXES = (".cs", ".py", ".ts", ".tsx", ".js", ".java", ".go", ".rs")
 _ZERO_SHA = "0" * 40
+_WORK_ITEM_REPOSITORY = "__work_items__"
 ArtifactKind = Literal["source", "document", "html"]
 
 
@@ -100,9 +101,42 @@ class ReconciliationService:
                 output.append(artifact)
         return output
 
-    async def sync_work_item(self, project: str, work_item_id: int) -> SourceArtifact:
+    async def sync_work_item(
+        self, project: str, work_item_id: int
+    ) -> SourceArtifact | None:
         payload = await self._client.get_work_item(work_item_id)
-        return work_item_artifact(ProjectId(project), payload)
+        revision = str(payload["rev"])
+        key = str(work_item_id)
+        known = await self._checkpoints.get(project, _WORK_ITEM_REPOSITORY, key)
+        if known == revision:
+            return None
+        artifact = work_item_artifact(ProjectId(project), payload)
+        await self._pipeline.persist_project_artifact(ProjectId(project), artifact)
+        await self._checkpoints.set(project, _WORK_ITEM_REPOSITORY, key, revision)
+        return artifact
+
+    async def delete_work_item(
+        self, project: str, work_item_id: int, *, revision: str
+    ) -> None:
+        artifact = SourceArtifact(
+            project_id=ProjectId(project),
+            artifact_id=ArtifactId(f"work-item:{work_item_id}"),
+            kind="work_item",
+            revision=revision,
+            content="",
+            observed_at=datetime.now(UTC),
+            deleted=True,
+        )
+        await self._pipeline.persist_project_artifact(ProjectId(project), artifact)
+        await self._checkpoints.set(
+            project, _WORK_ITEM_REPOSITORY, str(work_item_id), revision
+        )
+
+    async def reconcile_work_items(
+        self, project: str, work_item_types: tuple[str, ...]
+    ) -> None:
+        for work_item_id in await self._client.list_work_item_ids(work_item_types):
+            await self.sync_work_item(project, work_item_id)
 
     async def _release_for_tag(
         self, project: str, repository: str, ref: str, new_sha: str
@@ -178,10 +212,14 @@ class ReconciliationService:
             )
 
     async def reconcile_refs(
-        self, project: str, repository: str, tracked_refs: set[str]
+        self,
+        project: str,
+        repository: str,
+        tracked_refs: set[str],
+        release_tag_prefix: str = "refs/tags/",
     ) -> None:
         for ref in await self._client.list_refs(repository):
-            if ref.name not in tracked_refs:
+            if ref.name not in tracked_refs and not ref.name.startswith(release_tag_prefix):
                 continue
             known = await self._checkpoints.get(project, repository, ref.name)
             if known != ref.object_id:

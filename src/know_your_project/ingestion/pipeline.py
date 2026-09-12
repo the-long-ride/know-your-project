@@ -73,3 +73,24 @@ class IngestionPipeline:
         if release is not None:
             await self._revision_store.snapshot_release(project, release.release_id)
         await self._checkpoints.set(project_id, repository_name, ref, sha)
+
+    async def persist_project_artifact(
+        self, project_id: ProjectId, artifact: SourceArtifact
+    ) -> None:
+        scope = "project"
+        candidates = await self._extraction.extract(artifact)
+        previous = await self._revision_store.get_active_facts(
+            project_id, artifact.artifact_id, scope
+        )
+        plan = self._engine.plan(
+            project_id=project_id,
+            artifact_id=artifact.artifact_id,
+            previous=previous,
+            current=candidates,
+            effective_at=artifact.observed_at,
+            scope=scope,
+        )
+        await self._repository.apply(str(project_id), plan.mutations)
+        await self._revision_store.replace_active_facts(
+            project_id, artifact.artifact_id, plan.active_versions, scope
+        )

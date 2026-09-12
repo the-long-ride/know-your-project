@@ -21,6 +21,16 @@ class AzureDevOpsClient:
             response.raise_for_status()
             return cast(dict[str, Any], response.json())
 
+    async def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        async with httpx.AsyncClient(headers=self._headers, timeout=60) as client:
+            response = await client.post(
+                f"{self._root}/{path}",
+                params={"api-version": "7.1"},
+                json=payload,
+            )
+            response.raise_for_status()
+            return cast(dict[str, Any], response.json())
+
     async def list_refs(self, repository: str) -> list[GitRef]:
         body = await self._get_json(f"git/repositories/{repository}/refs")
         return [GitRef(name=x["name"], object_id=x["objectId"]) for x in body["value"]]
@@ -73,3 +83,15 @@ class AzureDevOpsClient:
         return await self._get_json(
             f"wit/workitems/{work_item_id}", {"$expand": "relations"}
         )
+
+    async def list_work_item_ids(self, work_item_types: tuple[str, ...]) -> list[int]:
+        if not work_item_types:
+            return []
+        quoted = ", ".join(
+            f"'{item.replace(chr(39), chr(39) * 2)}'" for item in work_item_types
+        )
+        body = await self._post_json(
+            "wit/wiql",
+            {"query": f"SELECT [System.Id] FROM WorkItems WHERE [System.WorkItemType] IN ({quoted})"},
+        )
+        return [int(item["id"]) for item in body.get("workItems", [])]
