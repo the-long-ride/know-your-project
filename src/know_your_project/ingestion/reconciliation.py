@@ -61,3 +61,35 @@ class ReconciliationService:
     async def sync_work_item(self, project: str, work_item_id: int) -> SourceArtifact:
         payload = await self._client.get_work_item(work_item_id)
         return work_item_artifact(ProjectId(project), payload)
+
+    async def sync_ref(
+        self,
+        project: str,
+        repository: str,
+        ref: str,
+        old_sha: str | None,
+        new_sha: str,
+    ) -> None:
+        if old_sha is None:
+            raise RuntimeError("initial repository backfill is not configured for this ref")
+        artifacts = await self.collect_git_artifacts(
+            project, repository, ref, old_sha, new_sha
+        )
+        await self._pipeline.persist(
+            project_id=project,
+            repository_name=repository,
+            ref=ref,
+            sha=new_sha,
+            artifacts=artifacts,
+            release=None,
+        )
+
+    async def reconcile_refs(
+        self, project: str, repository: str, tracked_refs: set[str]
+    ) -> None:
+        for ref in await self._client.list_refs(repository):
+            if ref.name not in tracked_refs:
+                continue
+            known = await self._checkpoints.get(project, repository, ref.name)
+            if known != ref.object_id:
+                await self.sync_ref(project, repository, ref.name, known, ref.object_id)
