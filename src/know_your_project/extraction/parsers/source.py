@@ -4,7 +4,7 @@ from know_your_project.domain.artifacts import Provenance, SourceArtifact
 from know_your_project.extraction.models import ParsedArtifact, ParsedSymbol
 
 _LANGUAGE = {
-    ".cs": "c_sharp", ".py": "python", ".ts": "typescript", ".tsx": "tsx",
+    ".cs": "csharp", ".py": "python", ".ts": "typescript", ".tsx": "tsx",
     ".js": "javascript", ".java": "java", ".go": "go", ".rs": "rust",
 }
 _SYMBOL_TYPES = {
