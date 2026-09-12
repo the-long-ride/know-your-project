@@ -37,6 +37,8 @@ The public MCP surface is intentionally limited to exactly seven read-only tools
 - `trace_work_item`
 - `get_screen_spec`
 
+Project-wide work-item knowledge and release-scoped software facts are searched together at the selected release timestamp. Live branch facts remain excluded from the public release query path.
+
 ## Supported project inputs
 
 Repository synchronization currently recognizes:
@@ -44,7 +46,7 @@ Repository synchronization currently recognizes:
 - source: `.cs`, `.py`, `.ts`, `.tsx`, `.js`, `.java`, `.go`, `.rs`
 - documents: `.md`, `.txt`, `.rst`
 - mockups/templates: `.html`, `.htm`
-- Azure DevOps work items: PBIs/user stories and other work-item payloads routed through the same semantic extraction pipeline
+- Azure DevOps work items: PBIs, user stories, bugs, and configured work-item types routed through the same semantic extraction pipeline
 
 Source is deterministically parsed before the local LLM receives bounded internal context. HTML is converted to screen/action/field semantics rather than exposed as markup through MCP.
 
@@ -57,7 +59,7 @@ valid_at <= release_time
 AND (invalid_at > release_time OR invalid_at IS NULL)
 ```
 
-Live branch state and release identity are separate concepts. Azure DevOps remains the source of truth.
+Live branch state and release identity are separate concepts. Azure DevOps remains the source of truth. New tracked refs are fully backfilled; later updates process changed files only. Release tags are synchronized separately and create immutable release identities while semantic fact history remains temporal.
 
 ## Graphiti and local models
 
@@ -75,6 +77,14 @@ cp .env.example .env
 
 At minimum configure Azure DevOps access, Neo4j credentials, local model endpoints, JWT verification, and `AZDO_WEBHOOK_SECRET`.
 
+Synchronization settings:
+
+- `AZDO_REPOSITORIES`: comma-separated Azure DevOps repository IDs or names to reconcile.
+- `AZDO_TRACKED_REFS`: comma-separated branch refs, for example `refs/heads/main,refs/heads/develop`.
+- `AZDO_RELEASE_TAG_PREFIX`: tag prefix treated as software releases; defaults to `refs/tags/`.
+- `AZDO_WORK_ITEM_TYPES`: comma-separated work-item types to reconcile; defaults to Product Backlog Item, User Story, and Bug.
+- `RECONCILIATION_INTERVAL_SECONDS`: periodic reconciliation interval; defaults to 300 seconds.
+
 Azure DevOps service hooks call:
 
 ```text
@@ -82,7 +92,7 @@ POST /hooks/azure-devops
 x-kyp-webhook-secret: <AZDO_WEBHOOK_SECRET>
 ```
 
-The webhook is an HTTP route, not an MCP tool.
+The webhook is an HTTP route, not an MCP tool. It accepts Git push events and Azure DevOps `workitem.*` events. Periodic reconciliation is still required so missed service-hook events are recovered.
 
 ## Run locally
 
@@ -111,6 +121,7 @@ Unit and contract suite:
 uv run pytest -q
 uv run ruff check .
 uv run mypy src
+docker compose config
 ```
 
 Graphiti/Neo4j integration, when Neo4j and local model services are configured:
