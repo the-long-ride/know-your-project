@@ -43,14 +43,40 @@ async def test_sync_work_item_persists_new_revision_and_skips_duplicate() -> Non
     pipeline.persist_project_artifact.assert_not_awaited()
 
 
-async def test_work_item_delete_retires_project_facts() -> None:
+async def test_work_item_delete_retires_project_facts_and_removes_checkpoint() -> None:
+    checkpoints = AsyncMock()
     service = ReconciliationService(
-        client=AsyncMock(), checkpoints=AsyncMock(), pipeline=AsyncMock(), revision_store=AsyncMock()
+        client=AsyncMock(), checkpoints=checkpoints, pipeline=AsyncMock(), revision_store=AsyncMock()
     )
     await service.delete_work_item("payments", 42, revision="8")
     artifact = service._pipeline.persist_project_artifact.await_args.args[1]
     assert artifact.deleted is True
     assert str(artifact.artifact_id) == "work-item:42"
+    checkpoints.delete.assert_awaited_once_with("payments", "__work_items__", "42")
+
+
+async def test_reconciliation_retires_work_items_missing_from_azure_devops() -> None:
+    client = AsyncMock()
+    client.list_work_item_ids.return_value = [42]
+    client.get_work_item.return_value = work_item_payload()
+    checkpoints = AsyncMock()
+    checkpoints.list_for_repository.return_value = {"42": "7", "43": "9"}
+    checkpoints.get.return_value = "7"
+    pipeline = AsyncMock()
+    service = ReconciliationService(
+        client=client, checkpoints=checkpoints, pipeline=pipeline, revision_store=AsyncMock()
+    )
+
+    await service.reconcile_work_items("payments", ("Product Backlog Item",))
+
+    deleted = [
+        call.args[1]
+        for call in pipeline.persist_project_artifact.await_args_list
+        if call.args[1].deleted
+    ]
+    assert len(deleted) == 1
+    assert str(deleted[0].artifact_id) == "work-item:43"
+    checkpoints.delete.assert_awaited_once_with("payments", "__work_items__", "43")
 
 
 def test_work_item_event_uses_resource_id() -> None:

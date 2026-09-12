@@ -24,6 +24,13 @@ def test_source_parser_finds_symbols_without_exposing_ast() -> None:
     assert "syntax_tree" not in parsed.model_dump()
 
 
+def test_source_parser_matches_extensions_case_insensitively() -> None:
+    parser = TreeSitterSourceParser()
+    source = artifact("source", "PaymentService.CS", "public class PaymentService {}")
+    assert parser.supports(source)
+    assert {s.name for s in parser.parse(source).symbols} == {"PaymentService"}
+
+
 def test_html_parser_returns_semantics_not_markup() -> None:
     parsed = HtmlParser().parse(artifact(
         "html", "retry.html",
