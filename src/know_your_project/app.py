@@ -131,7 +131,7 @@ async def _reconciliation_loop(runtime: Runtime, settings: Settings) -> None:
     while True:
         try:
             await reconcile_once(runtime, settings)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - long-running scheduler boundary
             audit("reconciliation_failed", error_type=type(exc).__name__)
         await asyncio.sleep(settings.reconciliation_interval_seconds)
 
