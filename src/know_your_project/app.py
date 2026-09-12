@@ -1,6 +1,8 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from fastmcp import FastMCP
 from graphiti_core import Graphiti
@@ -114,7 +116,8 @@ async def main() -> None:
     try:
         await runtime.mcp.run_async(transport="http", host="0.0.0.0", port=8000)
     finally:
-        await runtime.graphiti.close()
+        close_graphiti = cast(Callable[[], Awaitable[None]], runtime.graphiti.close)
+        await close_graphiti()
 
 
 if __name__ == "__main__":
