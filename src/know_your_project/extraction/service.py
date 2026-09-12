@@ -1,6 +1,7 @@
 import re
 
 from know_your_project.domain.artifacts import FactCandidate, SourceArtifact
+
 from .llm import LocalKnowledgeExtractor
 from .parsers.base import ArtifactParser
 

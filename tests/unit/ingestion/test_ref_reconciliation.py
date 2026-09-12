@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock
 
-from know_your_project.ingestion.reconciliation import ReconciliationService
 from know_your_project.ingestion.models import GitRef
+from know_your_project.ingestion.reconciliation import ReconciliationService
 
 
 async def test_reconcile_refs_processes_only_changed_tracked_refs() -> None:

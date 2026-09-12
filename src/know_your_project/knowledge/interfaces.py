@@ -2,6 +2,7 @@ from typing import Protocol
 
 from know_your_project.domain.queries import KnowledgeQuery
 from know_your_project.revisions.models import GraphMutation
+
 from .dto import KnowledgeResult
 
 

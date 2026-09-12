@@ -1,4 +1,5 @@
 import pytest
+
 from know_your_project.domain.ids import ProjectId
 from know_your_project.knowledge.dto import KnowledgeResult
 from know_your_project.security.authorization import AuthorizationError, AuthorizationService

@@ -1,4 +1,5 @@
 from know_your_project.domain.ids import ProjectId
+
 from .principal import Principal
 
 

@@ -4,6 +4,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from know_your_project.domain.artifacts import FactCandidate
+
 from .models import ParsedArtifact
 
 

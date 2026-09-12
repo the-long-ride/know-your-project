@@ -101,7 +101,7 @@ class ReconciliationService:
         commit = await self._client.get_commit(repository, new_sha)
         raw_date = (commit.get("committer") or {}).get("date")
         effective_at = (
-            datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+            datetime.fromisoformat(raw_date)
             if raw_date
             else datetime.now(UTC)
         )

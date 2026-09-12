@@ -1,4 +1,5 @@
 import os
+
 import pytest
 
 from know_your_project.knowledge.graphiti.client import create_graphiti

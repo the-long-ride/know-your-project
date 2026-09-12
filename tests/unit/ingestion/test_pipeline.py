@@ -37,8 +37,10 @@ async def test_checkpoint_not_advanced_when_graph_write_fails() -> None:
         )
     checkpoints.set.assert_not_awaited()
 
+
 async def test_release_snapshot_is_created_before_checkpoint() -> None:
     from datetime import UTC, datetime
+
     from know_your_project.domain.ids import ProjectId, ReleaseId
     from know_your_project.revisions.models import Release
 

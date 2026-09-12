@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from graphiti_core.search.search_filters import ComparisonOperator
+
 from know_your_project.knowledge.graphiti.temporal import temporal_filters
 
 

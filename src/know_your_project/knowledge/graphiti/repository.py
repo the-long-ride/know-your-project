@@ -1,12 +1,13 @@
 from typing import Any
 
 from graphiti_core.edges import EntityEdge
-from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.nodes import EntityNode
+from graphiti_core.utils.datetime_utils import utc_now
 
 from know_your_project.domain.queries import KnowledgeQuery
 from know_your_project.knowledge.dto import KnowledgeResult, SafeProvenance
 from know_your_project.revisions.models import GraphMutation, InvalidateFact, UpsertFact
+
 from .ids import entity_uuid
 from .temporal import temporal_filters
 

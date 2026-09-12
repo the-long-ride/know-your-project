@@ -4,6 +4,7 @@ from datetime import datetime
 import aiosqlite
 
 from know_your_project.domain.ids import ArtifactId, ProjectId, ReleaseId
+
 from .models import FactVersion, Release
 
 

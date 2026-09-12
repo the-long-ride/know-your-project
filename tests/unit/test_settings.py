@@ -1,7 +1,7 @@
 import pytest
 
-from know_your_project.settings import Settings
 from know_your_project.infrastructure.logging import audit
+from know_your_project.settings import Settings
 
 
 def test_settings_accept_explicit_self_hosted_configuration() -> None:

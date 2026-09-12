@@ -3,6 +3,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from know_your_project.domain.artifacts import FactCandidate
 from know_your_project.domain.ids import ArtifactId, ProjectId
+
 from .models import FactVersion, InvalidateFact, RevisionPlan, UpsertFact
 
 
