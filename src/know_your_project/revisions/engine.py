@@ -58,9 +58,10 @@ class RevisionEngine:
                 mutations.append(InvalidateFact(edge_uuid=old_fact.edge_uuid, invalid_at=effective_at))
 
         for key, candidate in new.items():
-            old_fact = old.get(key)
-            same = old_fact is not None and (
-                old_fact.value == candidate.value and old_fact.object_ref == candidate.object_ref
+            existing_fact = old.get(key)
+            same = existing_fact is not None and (
+                existing_fact.value == candidate.value
+                and existing_fact.object_ref == candidate.object_ref
             )
             if same:
                 continue

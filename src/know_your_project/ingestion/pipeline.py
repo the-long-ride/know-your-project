@@ -1,17 +1,24 @@
 from datetime import UTC, datetime
 
-from know_your_project.domain.ids import ProjectId
+from know_your_project.domain.artifacts import SourceArtifact
+from know_your_project.domain.ids import ArtifactId, ProjectId
+from know_your_project.extraction.service import ExtractionService
+from know_your_project.ingestion.checkpoints import SqliteCheckpointStore
+from know_your_project.knowledge.interfaces import KnowledgeRepository
+from know_your_project.revisions.engine import RevisionEngine
+from know_your_project.revisions.models import Release, RevisionPlan
+from know_your_project.revisions.store import SqliteRevisionStore
 
 
 class IngestionPipeline:
     def __init__(
         self,
         *,
-        extraction,
-        revision_engine,
-        revision_store,
-        repository,
-        checkpoints,
+        extraction: ExtractionService,
+        revision_engine: RevisionEngine,
+        revision_store: SqliteRevisionStore,
+        repository: KnowledgeRepository,
+        checkpoints: SqliteCheckpointStore,
     ) -> None:
         self._extraction = extraction
         self._engine = revision_engine
@@ -26,13 +33,13 @@ class IngestionPipeline:
         repository_name: str,
         ref: str,
         sha: str,
-        artifacts: list,
-        release,
+        artifacts: list[SourceArtifact],
+        release: Release | None,
     ) -> None:
         project = ProjectId(project_id)
         effective_at = release.effective_at if release else datetime.now(UTC)
         scope = "release" if release else f"branch:{ref}"
-        all_plans = []
+        all_plans: list[tuple[ArtifactId, RevisionPlan]] = []
         for artifact in artifacts:
             candidates = await self._extraction.extract(artifact)
             if release:

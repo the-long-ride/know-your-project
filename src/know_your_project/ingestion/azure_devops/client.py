@@ -1,4 +1,5 @@
 import base64
+from typing import Any, cast
 
 import httpx
 
@@ -11,12 +12,14 @@ class AzureDevOpsClient:
         encoded = base64.b64encode(f":{token}".encode()).decode()
         self._headers = {"Authorization": f"Basic {encoded}"}
 
-    async def _get_json(self, path: str, params: dict[str, str] | None = None) -> dict:
+    async def _get_json(
+        self, path: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         query = {"api-version": "7.1", **(params or {})}
         async with httpx.AsyncClient(headers=self._headers, timeout=60) as client:
             response = await client.get(f"{self._root}/{path}", params=query)
             response.raise_for_status()
-            return response.json()
+            return cast(dict[str, Any], response.json())
 
     async def list_refs(self, repository: str) -> list[GitRef]:
         body = await self._get_json(f"git/repositories/{repository}/refs")
@@ -58,14 +61,15 @@ class AzureDevOpsClient:
             },
         )
         return [
-            item["path"] for item in body.get("value", [])
+            str(item["path"])
+            for item in body.get("value", [])
             if not item.get("isFolder", False)
         ]
 
-    async def get_commit(self, repository: str, commit_sha: str) -> dict:
+    async def get_commit(self, repository: str, commit_sha: str) -> dict[str, Any]:
         return await self._get_json(f"git/repositories/{repository}/commits/{commit_sha}")
 
-    async def get_work_item(self, work_item_id: int) -> dict:
+    async def get_work_item(self, work_item_id: int) -> dict[str, Any]:
         return await self._get_json(
             f"wit/workitems/{work_item_id}", {"$expand": "relations"}
         )

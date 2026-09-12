@@ -4,7 +4,11 @@ from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from know_your_project.ingestion.webhooks import parse_push_event, verify_webhook_secret
+from know_your_project.ingestion.webhooks import (
+    AzureDevOpsWebhookHandler,
+    parse_push_event,
+    verify_webhook_secret,
+)
 from know_your_project.mcp.tools import KnowledgeTools
 
 
@@ -15,7 +19,7 @@ def create_mcp(
     issuer: str,
     audience: str,
     webhook_secret: str | None = None,
-    webhook_handler=None,
+    webhook_handler: AzureDevOpsWebhookHandler | None = None,
 ) -> FastMCP:
     auth = JWTVerifier(jwks_uri=jwks_uri, issuer=issuer, audience=audience)
     mcp = FastMCP(name="Know Your Project", auth=auth)

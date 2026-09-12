@@ -1,17 +1,23 @@
 from datetime import UTC, datetime
+from typing import Literal
 
 from know_your_project.domain.artifacts import SourceArtifact
 from know_your_project.domain.ids import ArtifactId, ProjectId, ReleaseId
+from know_your_project.ingestion.azure_devops.client import AzureDevOpsClient
 from know_your_project.ingestion.azure_devops.mapper import work_item_artifact
+from know_your_project.ingestion.checkpoints import SqliteCheckpointStore
+from know_your_project.ingestion.pipeline import IngestionPipeline
 from know_your_project.revisions.models import Release
+from know_your_project.revisions.store import SqliteRevisionStore
 
 _DOC_SUFFIXES = (".md", ".txt", ".rst")
 _HTML_SUFFIXES = (".html", ".htm")
 _SOURCE_SUFFIXES = (".cs", ".py", ".ts", ".tsx", ".js", ".java", ".go", ".rs")
 _ZERO_SHA = "0" * 40
+ArtifactKind = Literal["source", "document", "html"]
 
 
-def _kind_for_path(path: str) -> str | None:
+def _kind_for_path(path: str) -> ArtifactKind | None:
     lower = path.casefold()
     if lower.endswith(_DOC_SUFFIXES):
         return "document"
@@ -23,7 +29,14 @@ def _kind_for_path(path: str) -> str | None:
 
 
 class ReconciliationService:
-    def __init__(self, *, client, checkpoints, pipeline, revision_store=None) -> None:
+    def __init__(
+        self,
+        *,
+        client: AzureDevOpsClient,
+        checkpoints: SqliteCheckpointStore,
+        pipeline: IngestionPipeline,
+        revision_store: SqliteRevisionStore | None = None,
+    ) -> None:
         self._client = client
         self._checkpoints = checkpoints
         self._pipeline = pipeline
@@ -101,7 +114,7 @@ class ReconciliationService:
         commit = await self._client.get_commit(repository, new_sha)
         raw_date = (commit.get("committer") or {}).get("date")
         effective_at = (
-            datetime.fromisoformat(raw_date)
+            datetime.fromisoformat(str(raw_date))
             if raw_date
             else datetime.now(UTC)
         )

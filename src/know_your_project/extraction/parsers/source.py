@@ -1,9 +1,14 @@
+from typing import Literal
+
 from tree_sitter_language_pack import get_parser
 
 from know_your_project.domain.artifacts import Provenance, SourceArtifact
 from know_your_project.extraction.models import ParsedArtifact, ParsedSymbol
 
-_LANGUAGE = {
+SourceLanguage = Literal[
+    "csharp", "python", "typescript", "tsx", "javascript", "java", "go", "rust"
+]
+_LANGUAGE: dict[str, SourceLanguage] = {
     ".cs": "csharp", ".py": "python", ".ts": "typescript", ".tsx": "tsx",
     ".js": "javascript", ".java": "java", ".go": "go", ".rs": "rust",
 }

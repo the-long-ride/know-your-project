@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EntityNode
@@ -17,7 +17,7 @@ class GraphitiKnowledgeRepository:
         self._graphiti = graphiti
 
     async def _get_edge(self, uuid: str) -> EntityEdge:
-        return await EntityEdge.get_by_uuid(self._graphiti.driver, uuid)
+        return cast(EntityEdge, await EntityEdge.get_by_uuid(self._graphiti.driver, uuid))
 
     async def apply(self, project_id: str, mutations: list[GraphMutation]) -> None:
         for mutation in mutations:

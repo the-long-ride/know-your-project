@@ -1,11 +1,12 @@
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from know_your_project.domain.artifacts import SourceArtifact
 from know_your_project.domain.ids import ArtifactId, ProjectId
 
 
-def work_item_artifact(project_id: ProjectId, payload: dict) -> SourceArtifact:
-    f = payload["fields"]
+def work_item_artifact(project_id: ProjectId, payload: dict[str, Any]) -> SourceArtifact:
+    f = cast(dict[str, Any], payload["fields"])
     content = "\n".join([
         f"type: {f.get('System.WorkItemType', '')}",
         f"title: {f.get('System.Title', '')}",

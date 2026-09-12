@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from pydantic import BaseModel
 
 from know_your_project.domain.ids import ProjectId
@@ -8,7 +10,7 @@ class Principal(BaseModel):
     projects: set[ProjectId]
 
 
-def principal_from_claims(claims: dict) -> Principal:
+def principal_from_claims(claims: Mapping[str, object]) -> Principal:
     subject = str(claims.get("sub") or "")
     projects = claims.get("projects") or []
     if not subject:

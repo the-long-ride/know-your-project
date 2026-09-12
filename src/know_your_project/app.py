@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastmcp import FastMCP
+from graphiti_core import Graphiti
 
 from know_your_project.extraction.llm import LocalKnowledgeExtractor
 from know_your_project.extraction.parsers.document import DocumentParser
@@ -29,7 +30,7 @@ from know_your_project.settings import Settings
 @dataclass
 class Runtime:
     mcp: FastMCP
-    graphiti: object
+    graphiti: Graphiti
     revision_store: SqliteRevisionStore
     checkpoint_store: SqliteCheckpointStore
     reconciliation: ReconciliationService

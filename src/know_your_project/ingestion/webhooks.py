@@ -1,6 +1,9 @@
 import hmac
+from typing import Any
 
 from pydantic import BaseModel
+
+from know_your_project.ingestion.reconciliation import ReconciliationService
 
 
 class PushEvent(BaseModel):
@@ -15,7 +18,7 @@ def verify_webhook_secret(actual: str | None, expected: str) -> None:
         raise PermissionError("invalid webhook secret")
 
 
-def parse_push_event(payload: dict) -> PushEvent:
+def parse_push_event(payload: dict[str, Any]) -> PushEvent:
     resource = payload["resource"]
     update = resource["refUpdates"][0]
     return PushEvent(
@@ -27,7 +30,7 @@ def parse_push_event(payload: dict) -> PushEvent:
 
 
 class AzureDevOpsWebhookHandler:
-    def __init__(self, *, project: str, reconciliation) -> None:
+    def __init__(self, *, project: str, reconciliation: ReconciliationService) -> None:
         self._project = project
         self._reconciliation = reconciliation
 

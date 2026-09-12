@@ -4,7 +4,10 @@ from know_your_project.domain.queries import (
     ReleaseComparisonQuery,
     ReleaseKnowledgeQuery,
 )
+from know_your_project.knowledge.dto import KnowledgeResult
+from know_your_project.knowledge.interfaces import KnowledgeRepository
 from know_your_project.revisions.models import FactVersion
+from know_your_project.revisions.store import SqliteRevisionStore
 
 
 def _slot(fact: FactVersion) -> tuple[str, str, str]:
@@ -35,11 +38,13 @@ def _matches_component(fact: FactVersion, component: str | None) -> bool:
 
 
 class ReleaseQueryService:
-    def __init__(self, repository, revision_store) -> None:
+    def __init__(
+        self, repository: KnowledgeRepository, revision_store: SqliteRevisionStore
+    ) -> None:
         self._repository = repository
         self._store = revision_store
 
-    async def search(self, query: ReleaseKnowledgeQuery):
+    async def search(self, query: ReleaseKnowledgeQuery) -> list[KnowledgeResult]:
         if query.release_id is not None:
             release = await self._store.get_release(query.project_id, query.release_id)
             if release is None:
@@ -55,7 +60,9 @@ class ReleaseQueryService:
             limit=query.limit,
         ))
 
-    async def release_changes(self, project: ProjectId, release_id: ReleaseId):
+    async def release_changes(
+        self, project: ProjectId, release_id: ReleaseId
+    ) -> dict[str, object]:
         release = await self._store.get_release(project, release_id)
         if release is None:
             raise KeyError(f"unknown release: {release_id}")
@@ -75,7 +82,7 @@ class ReleaseQueryService:
         ))
         return {"release": str(release_id), **result}
 
-    async def compare(self, query: ReleaseComparisonQuery):
+    async def compare(self, query: ReleaseComparisonQuery) -> dict[str, object]:
         before = await self._store.get_release_snapshot(
             query.project_id, query.from_release
         )
@@ -119,7 +126,7 @@ class ReleaseQueryService:
         project: ProjectId,
         work_item_id: WorkItemId,
         release_id: ReleaseId | None,
-    ):
+    ) -> list[KnowledgeResult]:
         return await self.search(ReleaseKnowledgeQuery(
             project_id=project,
             text=f"work-item:{int(work_item_id)} PBI-{int(work_item_id)}",
