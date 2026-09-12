@@ -5,9 +5,10 @@ from graphiti_core.helpers import utc_now
 from graphiti_core.nodes import EntityNode
 
 from know_your_project.domain.queries import KnowledgeQuery
-from know_your_project.knowledge.dto import KnowledgeResult
+from know_your_project.knowledge.dto import KnowledgeResult, SafeProvenance
 from know_your_project.revisions.models import GraphMutation, InvalidateFact, UpsertFact
 from .ids import entity_uuid
+from .temporal import temporal_filters
 
 
 class GraphitiKnowledgeRepository:
@@ -73,4 +74,25 @@ class GraphitiKnowledgeRepository:
             await edge.save(self._graphiti.driver)
 
     async def search(self, query: KnowledgeQuery) -> list[KnowledgeResult]:
-        raise NotImplementedError
+        edges = await self._graphiti.search(
+            query.text,
+            group_ids=[str(query.project_id)],
+            num_results=query.limit,
+            search_filter=temporal_filters(query.as_of),
+        )
+        results: list[KnowledgeResult] = []
+        for edge in edges:
+            attrs = edge.attributes or {}
+            results.append(KnowledgeResult(
+                id=edge.uuid,
+                summary=edge.fact,
+                score=getattr(edge, "score", None),
+                valid_from=edge.valid_at,
+                valid_to=edge.invalid_at,
+                provenance=[SafeProvenance(
+                    source_kind=str(attrs.get("source_kind", "unknown")),
+                    source_id=str(attrs.get("source_id", "unknown")),
+                    release_id=str(attrs["release_id"]) if attrs.get("release_id") else None,
+                )],
+            ))
+        return results
