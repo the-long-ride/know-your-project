@@ -3,10 +3,10 @@ from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
-from fastmcp import FastMCP
 from graphiti_core import Graphiti
+from mcp.server import MCPServer
 
 from know_your_project.extraction.llm import LocalKnowledgeExtractor
 from know_your_project.extraction.parsers.document import DocumentParser
@@ -22,6 +22,7 @@ from know_your_project.ingestion.reconciliation import ReconciliationService
 from know_your_project.ingestion.webhooks import AzureDevOpsWebhookHandler
 from know_your_project.knowledge.graphiti.client import create_graphiti
 from know_your_project.knowledge.graphiti.repository import GraphitiKnowledgeRepository
+from know_your_project.mcp.auth import JwksJwtVerifier
 from know_your_project.mcp.server import create_mcp
 from know_your_project.mcp.tools import KnowledgeTools
 from know_your_project.revisions.engine import RevisionEngine
@@ -33,11 +34,14 @@ from know_your_project.settings import Settings
 
 @dataclass
 class Runtime:
-    mcp: FastMCP
+    mcp: MCPServer[Any]
     graphiti: Graphiti
     revision_store: SqliteRevisionStore
     checkpoint_store: SqliteCheckpointStore
     reconciliation: ReconciliationService
+    azure: AzureDevOpsClient
+    extractor: LocalKnowledgeExtractor
+    token_verifier: JwksJwtVerifier
 
 
 async def build_runtime(settings: Settings | None = None) -> Runtime:
@@ -96,11 +100,19 @@ async def build_runtime(settings: Settings | None = None) -> Runtime:
         project=settings.azdo_project,
         reconciliation=reconciliation,
     )
+    token_verifier = JwksJwtVerifier(
+        jwks_uri=str(settings.mcp_jwt_jwks_uri),
+        issuer=settings.mcp_jwt_issuer,
+        audience=settings.mcp_jwt_audience,
+    )
     mcp = create_mcp(
         tools=tools,
         jwks_uri=str(settings.mcp_jwt_jwks_uri),
         issuer=settings.mcp_jwt_issuer,
         audience=settings.mcp_jwt_audience,
+        resource_server_url=str(settings.mcp_resource_server_url),
+        required_scopes=settings.required_scopes,
+        token_verifier=token_verifier,
         webhook_secret=settings.azdo_webhook_secret,
         webhook_handler=webhook_handler,
     )
@@ -110,6 +122,9 @@ async def build_runtime(settings: Settings | None = None) -> Runtime:
         revision_store=revision_store,
         checkpoint_store=checkpoint_store,
         reconciliation=reconciliation,
+        azure=azure,
+        extractor=extractor,
+        token_verifier=token_verifier,
     )
 
 
@@ -141,11 +156,20 @@ async def main() -> None:
     runtime = await build_runtime(settings)
     reconciliation_task = asyncio.create_task(_reconciliation_loop(runtime, settings))
     try:
-        await runtime.mcp.run_async(transport="http", host="0.0.0.0", port=8000)
+        await runtime.mcp.run_streamable_http_async(
+            host="0.0.0.0",
+            port=8000,
+            streamable_http_path="/mcp",
+            json_response=True,
+            stateless_http=True,
+        )
     finally:
         reconciliation_task.cancel()
         with suppress(asyncio.CancelledError):
             await reconciliation_task
+        await runtime.extractor.aclose()
+        await runtime.azure.aclose()
+        await runtime.token_verifier.aclose()
         close_graphiti = cast(Callable[[], Awaitable[None]], runtime.graphiti.close)
         await close_graphiti()
 

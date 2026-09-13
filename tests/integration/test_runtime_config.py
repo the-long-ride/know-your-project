@@ -1,3 +1,4 @@
+import tomllib
 from pathlib import Path
 
 
@@ -10,18 +11,26 @@ def test_compose_keeps_neo4j_private() -> None:
 
 def test_readme_states_security_boundary() -> None:
     text = Path("README.md").read_text()
-    required = """## Security boundary
-
-MCP exposes semantic project knowledge only. It does not expose source files, source snippets,
-raw Graphiti episodes, arbitrary graph queries, Cypher, Azure DevOps credentials, or raw parser output.
-
-Graphiti and Neo4j are private infrastructure. MCP clients connect only to the Know Your Project
-HTTP MCP endpoint. Semantic extraction and embeddings can run entirely on self-hosted model services.
-"""
-    assert required in text
+    required_claims = (
+        "## Security boundary",
+        "MCP exposes semantic project knowledge only.",
+        "It does not expose source files, source snippets,",
+        "raw Graphiti episodes, arbitrary graph queries, Cypher, Azure DevOps credentials",
+        "Graphiti and Neo4j are private infrastructure.",
+        "MCP clients connect only to the Know Your Project",
+        "Semantic extraction and embeddings can run entirely on self-hosted model services.",
+    )
+    for claim in required_claims:
+        assert claim in text
 
 
 def test_dockerfile_does_not_assume_uncommitted_lockfile() -> None:
     text = Path("Dockerfile").read_text()
     if not Path("uv.lock").exists():
         assert "--frozen" not in text
+
+
+def test_graphiti_dependency_is_pinned_to_tested_minor() -> None:
+    project = tomllib.loads(Path("pyproject.toml").read_text())
+    dependencies = project["project"]["dependencies"]
+    assert "graphiti-core>=0.30.2,<0.31" in dependencies

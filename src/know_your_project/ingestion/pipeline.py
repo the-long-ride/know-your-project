@@ -26,6 +26,37 @@ class IngestionPipeline:
         self._repository = repository
         self._checkpoints = checkpoints
 
+    async def _plan_artifact(
+        self,
+        *,
+        project: ProjectId,
+        artifact: SourceArtifact,
+        scope: str,
+        effective_at: datetime,
+        release: Release | None = None,
+    ) -> RevisionPlan:
+        candidates = await self._extraction.extract(artifact)
+        if release is not None:
+            candidates = [
+                candidate.model_copy(update={
+                    "provenance": candidate.provenance.model_copy(
+                        update={"release_id": release.release_id}
+                    )
+                })
+                for candidate in candidates
+            ]
+        previous = await self._revision_store.get_active_facts(
+            project, artifact.artifact_id, scope
+        )
+        return self._engine.plan(
+            project_id=project,
+            artifact_id=artifact.artifact_id,
+            previous=previous,
+            current=candidates,
+            effective_at=effective_at,
+            scope=scope,
+        )
+
     async def persist(
         self,
         *,
@@ -41,29 +72,17 @@ class IngestionPipeline:
         scope = "release" if release else f"branch:{ref}"
         all_plans: list[tuple[ArtifactId, RevisionPlan]] = []
         for artifact in artifacts:
-            candidates = await self._extraction.extract(artifact)
-            if release:
-                candidates = [
-                    c.model_copy(update={
-                        "provenance": c.provenance.model_copy(
-                            update={"release_id": release.release_id}
-                        )
-                    })
-                    for c in candidates
-                ]
-            previous = await self._revision_store.get_active_facts(
-                project, artifact.artifact_id, scope
-            )
-            plan = self._engine.plan(
-                project_id=project,
-                artifact_id=artifact.artifact_id,
-                previous=previous,
-                current=candidates,
-                effective_at=effective_at,
+            plan = await self._plan_artifact(
+                project=project,
+                artifact=artifact,
                 scope=scope,
+                effective_at=effective_at,
+                release=release,
             )
             all_plans.append((artifact.artifact_id, plan))
 
+        # Preserve the two-phase ordering: no revision/checkpoint state advances until
+        # every graph mutation for this ref has succeeded.
         for _, plan in all_plans:
             await self._repository.apply(project_id, plan.mutations)
         for artifact_id, plan in all_plans:
@@ -78,17 +97,11 @@ class IngestionPipeline:
         self, project_id: ProjectId, artifact: SourceArtifact
     ) -> None:
         scope = "project"
-        candidates = await self._extraction.extract(artifact)
-        previous = await self._revision_store.get_active_facts(
-            project_id, artifact.artifact_id, scope
-        )
-        plan = self._engine.plan(
-            project_id=project_id,
-            artifact_id=artifact.artifact_id,
-            previous=previous,
-            current=candidates,
-            effective_at=artifact.observed_at,
+        plan = await self._plan_artifact(
+            project=project_id,
+            artifact=artifact,
             scope=scope,
+            effective_at=artifact.observed_at,
         )
         await self._repository.apply(str(project_id), plan.mutations)
         await self._revision_store.replace_active_facts(
