@@ -10,26 +10,27 @@ class AzureDevOpsClient:
     def __init__(self, *, base_url: str, project: str, token: str) -> None:
         self._root = f"{base_url.rstrip('/')}/{project}/_apis"
         encoded = base64.b64encode(f":{token}".encode()).decode()
-        self._headers = {"Authorization": f"Basic {encoded}"}
+        self._client = httpx.AsyncClient(
+            headers={"Authorization": f"Basic {encoded}"},
+            timeout=60,
+        )
 
     async def _get_json(
         self, path: str, params: dict[str, str] | None = None
     ) -> dict[str, Any]:
         query = {"api-version": "7.1", **(params or {})}
-        async with httpx.AsyncClient(headers=self._headers, timeout=60) as client:
-            response = await client.get(f"{self._root}/{path}", params=query)
-            response.raise_for_status()
-            return cast(dict[str, Any], response.json())
+        response = await self._client.get(f"{self._root}/{path}", params=query)
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
 
     async def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        async with httpx.AsyncClient(headers=self._headers, timeout=60) as client:
-            response = await client.post(
-                f"{self._root}/{path}",
-                params={"api-version": "7.1"},
-                json=payload,
-            )
-            response.raise_for_status()
-            return cast(dict[str, Any], response.json())
+        response = await self._client.post(
+            f"{self._root}/{path}",
+            params={"api-version": "7.1"},
+            json=payload,
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
 
     async def list_refs(self, repository: str) -> list[GitRef]:
         body = await self._get_json(f"git/repositories/{repository}/refs")
@@ -46,18 +47,17 @@ class AzureDevOpsClient:
         ]
 
     async def file_text(self, repository: str, path: str, version: str) -> str:
-        async with httpx.AsyncClient(headers=self._headers, timeout=60) as client:
-            response = await client.get(
-                f"{self._root}/git/repositories/{repository}/items",
-                params={
-                    "path": path,
-                    "versionDescriptor.version": version,
-                    "includeContent": "true",
-                    "api-version": "7.1",
-                },
-            )
-            response.raise_for_status()
-            return response.text
+        response = await self._client.get(
+            f"{self._root}/git/repositories/{repository}/items",
+            params={
+                "path": path,
+                "versionDescriptor.version": version,
+                "includeContent": "true",
+                "api-version": "7.1",
+            },
+        )
+        response.raise_for_status()
+        return response.text
 
     async def list_files(self, repository: str, version: str) -> list[str]:
         body = await self._get_json(
@@ -95,3 +95,6 @@ class AzureDevOpsClient:
             {"query": f"SELECT [System.Id] FROM WorkItems WHERE [System.WorkItemType] IN ({quoted})"},
         )
         return [int(item["id"]) for item in body.get("workItems", [])]
+
+    async def aclose(self) -> None:
+        await self._client.aclose()

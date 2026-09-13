@@ -73,7 +73,6 @@ class ReconciliationService:
         self,
         project: str,
         repository: str,
-        ref: str,
         old_sha: str,
         new_sha: str,
     ) -> list[SourceArtifact]:
@@ -92,7 +91,7 @@ class ReconciliationService:
         return output
 
     async def collect_full_artifacts(
-        self, project: str, repository: str, ref: str, new_sha: str
+        self, project: str, repository: str, new_sha: str
     ) -> list[SourceArtifact]:
         output: list[SourceArtifact] = []
         for path in await self._client.list_files(repository, new_sha):
@@ -128,15 +127,24 @@ class ReconciliationService:
             deleted=True,
         )
         await self._pipeline.persist_project_artifact(ProjectId(project), artifact)
-        await self._checkpoints.set(
-            project, _WORK_ITEM_REPOSITORY, str(work_item_id), revision
+        await self._checkpoints.delete(
+            project, _WORK_ITEM_REPOSITORY, str(work_item_id)
         )
 
     async def reconcile_work_items(
         self, project: str, work_item_types: tuple[str, ...]
     ) -> None:
-        for work_item_id in await self._client.list_work_item_ids(work_item_types):
+        current_ids = set(await self._client.list_work_item_ids(work_item_types))
+        known = await self._checkpoints.list_for_repository(project, _WORK_ITEM_REPOSITORY)
+        for work_item_id in sorted(current_ids):
             await self.sync_work_item(project, work_item_id)
+        for key, revision in known.items():
+            if key.isdigit() and int(key) not in current_ids:
+                await self.delete_work_item(
+                    project,
+                    int(key),
+                    revision=f"reconciled-delete:{revision}",
+                )
 
     async def _release_for_tag(
         self, project: str, repository: str, ref: str, new_sha: str
@@ -183,12 +191,10 @@ class ReconciliationService:
             )
 
         if base_sha is None or base_sha == _ZERO_SHA:
-            artifacts = await self.collect_full_artifacts(
-                project, repository, ref, new_sha
-            )
+            artifacts = await self.collect_full_artifacts(project, repository, new_sha)
         else:
             artifacts = await self.collect_git_artifacts(
-                project, repository, ref, base_sha, new_sha
+                project, repository, base_sha, new_sha
             )
 
         try:

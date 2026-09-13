@@ -19,14 +19,21 @@ _SYMBOL_TYPES = {
 }
 
 
+def _suffix(path: str) -> str | None:
+    lower = path.casefold()
+    return next((suffix for suffix in _LANGUAGE if lower.endswith(suffix)), None)
+
+
 class TreeSitterSourceParser:
     def supports(self, artifact: SourceArtifact) -> bool:
-        return bool(artifact.path and any(artifact.path.endswith(s) for s in _LANGUAGE))
+        return bool(artifact.path and _suffix(artifact.path))
 
     def parse(self, artifact: SourceArtifact) -> ParsedArtifact:
         if artifact.path is None:
             raise ValueError("source path required")
-        suffix = next(s for s in _LANGUAGE if artifact.path.endswith(s))
+        suffix = _suffix(artifact.path)
+        if suffix is None:
+            raise ValueError(f"unsupported source extension: {artifact.path}")
         raw = artifact.content.encode("utf-8")
         tree = get_parser(_LANGUAGE[suffix]).parse(raw)
         symbols: list[ParsedSymbol] = []

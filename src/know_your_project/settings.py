@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     mcp_jwt_jwks_uri: AnyHttpUrl
     mcp_jwt_issuer: str
     mcp_jwt_audience: str
+    mcp_resource_server_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8000/mcp")
+    mcp_required_scopes: str = ""
     checkpoint_db: str = "./data/state.db"
 
     @staticmethod
@@ -41,3 +43,7 @@ class Settings(BaseSettings):
     @property
     def work_item_types(self) -> tuple[str, ...]:
         return self._csv(self.azdo_work_item_types)
+
+    @property
+    def required_scopes(self) -> tuple[str, ...]:
+        return self._csv(self.mcp_required_scopes)

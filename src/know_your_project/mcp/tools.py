@@ -1,4 +1,4 @@
-from fastmcp.server.dependencies import get_access_token
+from mcp.server.auth.middleware.auth_context import get_access_token
 
 from know_your_project.domain.ids import ProjectId, ReleaseId, WorkItemId
 from know_your_project.domain.queries import ReleaseComparisonQuery, ReleaseKnowledgeQuery
@@ -21,7 +21,7 @@ class KnowledgeTools:
         token = get_access_token()
         if token is None:
             raise PermissionError("authentication required")
-        return principal_from_claims(token.claims)
+        return principal_from_claims(token.claims or {})
 
     def _authorize(self, project: str) -> ProjectId:
         project_id = ProjectId(project)
