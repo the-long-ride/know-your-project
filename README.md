@@ -85,7 +85,21 @@ Work-item reconciliation stores revision checkpoints independently from Git refs
 
 The project pins `graphiti-core>=0.30.2,<0.31`, the Graphiti minor line exercised by CI. Because the project intentionally does not commit a generated `uv.lock`, keeping the pre-1 Graphiti dependency within the tested minor line avoids silent API jumps during builds. Graphiti and Neo4j remain private services.
 
-Semantic extraction uses an OpenAI-compatible self-hosted endpoint such as Ollama or vLLM. The default example model is `gpt-oss:20b`; the embedding model is configured independently through `LOCAL_EMBEDDING_MODEL`.
+Semantic extraction uses an OpenAI-compatible self-hosted endpoint such as Ollama or vLLM. For a lightweight local setup, the recommended models are:
+
+```bash
+ollama pull granite4:3b
+ollama pull granite-embedding:30m
+```
+
+Configure them with:
+
+```env
+LOCAL_LLM_MODEL=granite4:3b
+LOCAL_EMBEDDING_MODEL=granite-embedding:30m
+```
+
+`granite4:3b` is the recommended lightweight default for semantic extraction when `gpt-oss:20b` is too large. `granite-embedding:30m` is the recommended lightweight embedding model. The previous examples, `gpt-oss:20b` and `nomic-embed-text`, remain valid alternatives.
 
 No external model provider is required for proprietary source processing. Azure DevOps and local LLM clients reuse long-lived HTTP transports rather than creating a new connection pool per request.
 
